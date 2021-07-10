@@ -1,5 +1,12 @@
+from agents.base_agent import *
+from nn_builder.pytorch.CNN import CNN
+from helpers import *
+import random
+import numpy as np
+
 class DDQN(Base_Agent):
-    """ Double DQN agent
+    """
+    Model Double DQN agent
     """
     def __init__(self, agent_name, env, epsilon, epsilon_decay_rate, gamma, batch_size):
         super().__init__(agent_name, env)
@@ -19,8 +26,6 @@ class DDQN(Base_Agent):
                             ["linear", 32],
                             ["linear", self.env.nA]],
                             hidden_activations="relu",
-#                             output_activation="softmax",
-#                             dropout=0.5,
                             initialiser="xavier",
                             batch_norm=False)
 
@@ -31,8 +36,6 @@ class DDQN(Base_Agent):
                             ["linear", 32],
                             ["linear", self.env.nA]],
                             hidden_activations="relu",
-#                             output_activation="softmax",
-#                             dropout=0.5,
                             initialiser="xavier",
                             batch_norm=False)
 
@@ -51,18 +54,11 @@ class DDQN(Base_Agent):
           :param state: the current state
           :return action: next action to take
         """
-        random.seed(time.time())
         random_number = np.random.uniform()
         if random_number < self.epsilon and evaluate==False:
             # Random action
             return torch.tensor(random.randint(0,self.env.nA-1))
 
-
-#             if self.env.env_name == "segment":
-# #                 return torch.tensor([random.randint(0,self.env.number_of_action_channels-1), random.randint(0,self.env.number_of_rows-1), random.randint(0,self.env.number_of_columns-1)]) # 2 kinds of actions
-#                 return torch.tensor([random.randint(0,self.env.number_of_action_channels-1), random.randint(0,self.env.number_of_rows-1), random.randint(0,self.env.number_of_columns-1)])
-#             elif self.env.env_name == "battleship":
-#                 return torch.tensor([random.randint(0,self.env.number_of_rows-1), random.randint(0,self.env.number_of_columns-1)])
         else:
             # Greedy action
             state = [state]
@@ -70,9 +66,6 @@ class DDQN(Base_Agent):
             state = state.to(self.device, dtype=torch.float)
             q_values = self.main_dqn(state)
             argmax = torch.argmax(q_values).item()
-
-#             if evaluate:
-#                 self.list_evaluation_values.append(q_values.reshape(self.env.number_of_rows, self.env.number_of_columns))
 
             if evaluate:
                 if self.env.freely_moving:
@@ -82,20 +75,9 @@ class DDQN(Base_Agent):
 
             return torch.tensor(argmax)
 
-#             if self.env.env_name == "segment":
-#                 return torch.tensor(np.unravel_index(argmax, (self.env.number_of_action_channels, self.env.number_of_rows, self.env.number_of_columns)))
-#             elif self.env.env_name == "battleship":
-#                 return torch.tensor(np.unravel_index(argmax, (self.env.number_of_rows, self.env.number_of_columns)))
-
-
     def train(self):
         """
         Train the network with a batch of samples
-        :param states: The state before taking the action
-        :param actions: action taken
-        :param rewards: Reward for taking that action
-        :param next_states: The state that the agent enters after taking the action
-        :return loss: the loss value after training the batch of samples
         """
         if len(self.buffer) >= self.batch_size:
             with torch.no_grad():
@@ -111,13 +93,6 @@ class DDQN(Base_Agent):
             dones = torch.stack(dones).to(self.device, dtype=torch.float)
 
             #TODO
-#             if self.env.env_name == "battleship":
-#                 ravel = torch.tensor([[self.env.number_of_columns*1.0], [1.0]], dtype=torch.float64).to(self.device, dtype=torch.float)
-#             elif self.env.env_name == "segment":
-#                 ravel = torch.tensor([[self.env.number_of_rows * self.env.number_of_columns * 1.0], [self.env.number_of_columns*1.0], [1.0]], dtype=torch.float64).to(self.device, dtype=torch.float)
-#                 ravel = torch.tensor([[self.env.number_of_columns*1.0], [1.0]], dtype=torch.float64).to(self.device, dtype=torch.float)
-
-#             actions = torch.matmul(actions,ravel) # size([128, 1])
 
             # Calculate target Q values using the Target Network
             selection = torch.argmax(self.main_dqn(next_states), dim = 1).unsqueeze(1)
@@ -150,19 +125,12 @@ class DDQN(Base_Agent):
             q_value = action_masks * self.main_dqn(states)
             q_value = torch.sum(q_value, dim=-1).reshape((self.batch_size, 1))
 
-#             print("target size=", target.size())
-#             print("q_value size=", q_value.size())
-
             # Calculate loss
             loss = self.mse(target, q_value)
-#             loss = self.L1(target, q_value)
 
             # Optimize the model
             self.optimizer.zero_grad()
             loss.backward()
-#             for param in self.main_dqn.parameters():
-#                 # Clip the target to avoid exploding gradients
-#                 param.grad.data.clamp_(-1e-6,1e-6)
             torch.nn.utils.clip_grad_norm_(self.main_dqn.parameters(), 5)
             self.optimizer.step()
 

@@ -1,4 +1,11 @@
+from agents.base_agent import *
+import time
+import numpy as np
+import scipy.stats
 
+"""
+This code is adapted from: https://github.com/jamesrobertlloyd/automl-phase-1
+"""
 
 def trunc_norm_mean_upper_tail(a, mean, std):
     alpha = (a - mean) / std
@@ -16,7 +23,9 @@ def trunc_norm_mean_upper_tail(a, mean, std):
 
 
 def ft_K_t_t(t, t_star, scale, alpha, beta):
-    """Exponential decay mixture kernel"""
+    """
+    Exponential decay mixture kernel
+    """
     # Check 1d
     # TODO - Abstract this checking behaviour - check pybo and gpy for inspiration
     t = np.array(t)
@@ -32,7 +41,9 @@ def ft_K_t_t(t, t_star, scale, alpha, beta):
 
 
 def ft_K_t_t_plus_noise(t, t_star, scale, alpha, beta, log_noise):
-    """Ronseal - clearly this behaviour should be abstracted"""
+    """
+    Ronseal - clearly this behaviour should be abstracted
+    """
     # TODO - abstract kernel addition etc
     noise = np.exp(log_noise)
     K_t_t = ft_K_t_t(t, t_star, scale=scale, alpha=alpha, beta=beta)
@@ -41,7 +52,9 @@ def ft_K_t_t_plus_noise(t, t_star, scale, alpha, beta, log_noise):
 
 
 def cov_iid(x, z=None, scale=1):
-    """Identity kernel, scaled"""
+    """
+    Identity kernel, scaled
+    """
     if z is None:
         z = x
     # Check 1d
@@ -60,7 +73,9 @@ def cov_iid(x, z=None, scale=1):
 
 
 def cov_matern_5_2(x, z=None, scale=1, ell=1):
-    """Identity kernel, scaled"""
+    """
+    Identity kernel, scaled
+    """
     if z is None:
         z = x
     # Check 1d
@@ -105,36 +120,22 @@ def slice_sample_bounded_max(N, burn, logdist, xx, widths, step_out, max_attempt
 
     for ii in range(N + burn):
         log_uprime = np.log(random.random()) + log_Px
-        # print('xx = %s' % xx)
-        # print('Current ll = %f' % log_Px)
-        # print('Slice = %f' % log_uprime)
         for dd in random.sample(range(D), D):
-            # print('dd = %d' % dd)
-            # print('xx = %s' % xx)
             x_l = copy.deepcopy(xx)
-            # print('x_l = %s' % x_l)
             x_r = copy.deepcopy(xx)
             xprime = copy.deepcopy(xx)
 
             # Create a horizontal interval (x_l, x_r) enclosing xx
             rr = random.random()
-            # print(xx[dd])
-            # print(rr)
-            # print(widths[dd])
-            # print(self.bounds[dd][0])
             x_l[dd] = max(xx[dd] - rr*widths[dd], bounds[dd][0])
             x_r[dd] = min(xx[dd] + (1-rr)*widths[dd], bounds[dd][1])
-            # print('x_l = %s' % x_l)
-            # if x_l[3] > 0:
-            #     print('Large noise')
+
             if step_out:
                 while logdist(x_l) > log_uprime and x_l[dd] > bounds[dd][0]:
-                    # if x_l[3] > 0:
-                    #     print('Large noise')
+
                     x_l[dd] = max(x_l[dd] - widths[dd], bounds[dd][0])
                 while logdist(x_r) > log_uprime and x_r[dd] < bounds[dd][1]:
                     x_r[dd] = min(x_r[dd] + widths[dd], bounds[dd][1])
-            # print(x_l[dd])
 
             # Propose xprimes and shrink interval until good one found
             zz = 0
@@ -143,14 +144,10 @@ def slice_sample_bounded_max(N, burn, logdist, xx, widths, step_out, max_attempt
                 zz += 1
                 # print(x_l)
                 xprime[dd] = random.random()*(x_r[dd] - x_l[dd]) + x_l[dd]
-                # print(x_l[dd])
-                # if xprime[3] > 0:
-                #     print('Large noise')
+            
                 log_Px = logdist(xx)
                 if log_Px > log_uprime:
                     xx[dd] = xprime[dd]
-                    # print(dd)
-                    # print(xx)
                     break
                 else:
                     # Shrink in
@@ -172,7 +169,9 @@ def slice_sample_bounded_max(N, burn, logdist, xx, widths, step_out, max_attempt
 
 # noinspection PyTypeChecker
 def ft_ll(m, t, y, x, x_kernel, x_kernel_params, t_kernel, t_kernel_params):
-    """Freeze thaw log likelihood"""
+    """
+    Freeze thaw log likelihood
+    """
     # Take copies of everything - this is a function
     m = copy.deepcopy(m)
     t = copy.deepcopy(t)
@@ -194,8 +193,6 @@ def ft_ll(m, t, y, x, x_kernel, x_kernel_params, t_kernel, t_kernel_params):
         y[n] = np.array(y[n], ndmin=2)
         if y[n].shape[0] == 1:
             y[n] = y[n].T
-        # print("np.ones((1, len(t[n])))=", np.ones((1, len(t[n]))))
-        # print("np.linalg.solve(K_t[n], np.ones((len(t[n]), 1)))=", np.linalg.solve(K_t[n], np.ones((len(t[n]), 1))))
         gamma[n] = np.dot(np.ones((1, len(t[n]))), np.linalg.solve(K_t[n], y[n] - m[n] * np.ones(y[n].shape)))
 
     Lambd = np.diag(lambd.ravel())
@@ -213,18 +210,14 @@ def ft_ll(m, t, y, x, x_kernel, x_kernel_params, t_kernel, t_kernel_params):
     ll += - 0.5 * np.log(np.linalg.det(np.linalg.inv(K_x) + Lambd))
     ll += - 0.5 * np.log(np.linalg.det(K_x))
 
-    # Prior on kernel params
-    # TODO - abstract me
-    # ll += scipy.stats.norm.logpdf(np.log(t_kernel_params['a']))
-    # ll += scipy.stats.norm.logpdf(np.log(t_kernel_params['b']))
-    # ll += np.log(1 / t_kernel_params['scale'])
-
     return ll
 
 
 # noinspection PyTypeChecker
 def ft_posterior(m, t, y, t_star, x, x_kernel, x_kernel_params, t_kernel, t_kernel_params):
-    """Freeze thaw posterior (predictive)"""
+    """
+    Freeze thaw posterior (predictive)
+    """
     # Take copies of everything - this is a function
     m = copy.deepcopy(m)
     t = copy.deepcopy(t)
@@ -260,13 +253,7 @@ def ft_posterior(m, t, y, t_star, x, x_kernel, x_kernel_params, t_kernel, t_kern
     Lambda_inv = np.diag(1 / lambd.ravel())
     C = K_x - np.dot(K_x, np.linalg.solve(K_x + Lambda_inv, K_x))
     mu = m + np.dot(C, gamma)
-
-    # f_mean = mu
-    # f_var = C
-
     for n in range(N):
-        # print("K_t_t_star[n].T=", K_t_t_star[n].T)
-        # print("np.linalg.solve(K_t[n], y[n])=", np.linalg.solve(K_t[n], y[n]))
         y_mean[n] = np.dot(K_t_t_star[n].T, np.linalg.solve(K_t[n], y[n])) + Omega[n] * mu[n]
 
     K_t_star_t_star = [None] * N
@@ -282,7 +269,9 @@ def ft_posterior(m, t, y, t_star, x, x_kernel, x_kernel_params, t_kernel, t_kern
     return y_mean, y_var
 
 def colorbrew(i):
-    """Nice colors taken from http://colorbrewer2.org/ by David Duvenaud March 2012"""
+    """
+    Nice colors taken from http://colorbrewer2.org/ by David Duvenaud March 2012
+    """
     rgbs = [(228,  26,  28),
             (55, 126, 184),
             (77, 175,  74),
@@ -300,13 +289,16 @@ def colorbrew(i):
 
 class Freeze_Thaw(Base_Agent):
     """
-    Model a Freeze_Thaw agent
+    Model the Freeze_Thaw agent
     """
     def __init__(self, agent_name, env):
         super().__init__(agent_name, env)
         self.initialize()
 
     def initialize(self):
+        """
+        Initialization
+        """
         self.start_thinking = False
         self.compute_quantum = self.env.time_for_each_action
 #         self.all_pickles = [[0], [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12]]
@@ -331,7 +323,6 @@ class Freeze_Thaw(Base_Agent):
         self.x_ell = []
         self.a = []
         self.b = []
-
 
         for pickles in self.all_pickles:
             self.scores.append([[] for _ in range(len(pickles))])
@@ -358,34 +349,25 @@ class Freeze_Thaw(Base_Agent):
                   [0.33, 3]]
 
     def think(self, action, next_state):
+        """
+        Process the current state to update models
+        """
         self.remaining_time -= self.env.time_for_each_action
         self.time_budget = self.env.max_number_of_steps
         plot=False
         start = time.time()              # Reset the counter
-        """Freeze thaw on cross validated random forest and gbm"""
-#         if len(self.models_to_be_run)>1:
-
         j = action.item()
         i = 0
 
-#         print("j=", j)
-#         print("next_state=", next_state)
         model_scores = [next_state[0][0].tolist()[j]]
         model_times = [next_state[1][0].tolist()[j]*self.env.max_number_of_steps]
-
 
         # Add some jitter to make the GPs happier
         # FIXME - this can be fixed with better modelling assumptions
         for k in range(len(model_scores)):
             model_scores[k] += 0.0005 * np.random.normal()
-#             print("model_scores=", model_scores)
 
         self.scores[j][i] += model_scores
-#                     print("scores[j][i]=", scores[j][i])
-#         if len(self.times[j][i])>0:
-#             self.times[j][i] += [self.times[j][i][-1] + self.compute_quantum]
-#         else:
-#             self.times[j][i] += [self.compute_quantum]
 
         self.times[j][i] +=  model_times
         # Save adjusted time corresponding to prediction
@@ -414,10 +396,9 @@ class Freeze_Thaw(Base_Agent):
                                                                   for k in np.linspace(0, len(times_subset[i]) - 1, 50)[1:]]])
                         scores_subset[i] = list(np.array(scores_subset[i])[[int(np.floor(k))
                                                                     for k in np.linspace(0, len(scores_subset[i]) - 1, 50)[1:]]])
-                    # print(len(times_subset[i]))
+
                 for i in range(len(pickles)):
-#                     print("t_star=", t_star)
-#                     print("self.times=", self.times)
+
                     t_star[j].append(np.linspace(self.times[j][i][-1], self.times[j][i][-1] + self.remaining_time, 50))
                 # Sample parameters
                 xx = [self.alpha[j], self.beta[j], self.scale[j], self.log_noise[j], self.x_scale[j], self.x_ell[j]]
@@ -474,18 +455,9 @@ class Freeze_Thaw(Base_Agent):
                         best_model_index = i
                         best_pickle_index = j
 
-
-    #         for _ in range(len(self.all_pickles)):
-    #             self.models_to_be_run.append([])
-    #             self.models_to_be_run[best_pickle_index] = [best_model_index]
-
             if len(self.models_to_be_run) == 0:
-#                 print("self.models_to_be_run.append(best_pickle_index)", self.models_to_be_run)
                 self.models_to_be_run.append(best_pickle_index)
-#                 print("self.models_to_be_run.append(best_pickle_index)", self.models_to_be_run)
 
-    #             print('Selecting pickle index : %d' % best_pickle_index)
-    #             print('Selecting model index : %d' % best_model_index)
             # Plot curves
             if plot:
                 # TODO - Make this save to temp directory
@@ -498,8 +470,6 @@ class Freeze_Thaw(Base_Agent):
                 label_count = 0
                 for j in range(len(self.all_pickles)):
                     for i in range(len(scores[j])):
-    #                         print("times[j][i]=", times[j][i])
-    #                         print("scores[j][i]=", scores[j][i])
                         ax.plot(times[j][i], scores[j][i],
                                 color=colorbrew(label_count),
                                 linestyle='dashed', marker='o',
@@ -516,14 +486,10 @@ class Freeze_Thaw(Base_Agent):
                 leg.get_frame().set_alpha(0.5)
                 plt.show()
 
-#             for j in range(len(self.all_pickles)):
-#                 for i in range(len(self.scores[j])):
-#                     print("times[" + str(j) +"][" + str(i) + "]=")
-#                     print(self.times[j][i])
-#                     print("scores[" + str(j) +"][" + str(i) + "]=")
-#                     print(self.scores[j][i])
-
     def select_action(self, state, evaluate=False):
+        """
+        Output the next action
+        """
         action = self.models_to_be_run.pop(0)
         if len(self.models_to_be_run)==0:
             self.start_thinking = True

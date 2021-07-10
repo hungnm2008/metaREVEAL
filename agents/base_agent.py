@@ -1,3 +1,11 @@
+import torch
+import matplotlib.pyplot as plt
+from collections import deque
+import pandas as pd
+import copy
+import random
+import numpy as np
+import math
 class Replay():
     """
     Memory for storing experience
@@ -44,8 +52,11 @@ class Replay():
             dones.append(done)
 
         return states, actions, rewards, next_states, dones
-        
+
 class Base_Agent():
+    """
+    A base for all agents
+    """
     def __init__(self, agent_name, env):
         """ Initialization
         :param agent_name: (str) name of the agent, e.g., SAC_agent
@@ -64,16 +75,11 @@ class Base_Agent():
         spec = self.fig.add_gridspec(ncols=2, nrows=2, width_ratios=widths, height_ratios=heights, wspace=0.2, hspace=0.3)
 
         self.ax = self.fig.add_subplot(spec[0, :])
-#         self.cbar_ax2 = self.fig.add_subplot(spec[1,0])
-#         self.ax2 = self.fig.add_subplot(spec[1,1])
-
         self.ax3 = self.fig.add_subplot(spec[1,0])
         self.cbar_ax3 = self.fig.add_subplot(spec[1,1])
 
         self.fig.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
         self.fig.subplots_adjust(left=0.1, right=0.9, bottom=0.1, top=0.9)
-#         grid_kws = {'width_ratios': (2, 0.02, 1, 0.02, 1), 'wspace': 1.2}
-#         self.fig, (self.ax, self.cbar_ax2, self.ax2, self.cbar_ax3, self.ax3) = plt.subplots(1, 5, gridspec_kw = grid_kws, figsize = (25, 5))
 
     def select_action(self, state, evaluate):
         """ Select the next action
@@ -89,13 +95,17 @@ class Base_Agent():
         pass
 
     def soft_update_of_target_network(self, local_model, target_model, tau):
-        """Updates the target network in the direction of the local network but by taking a step size
-        less than one so the target network's parameter values trail the local networks. This helps stabilise training"""
+        """
+        Updates the target network in the direction of the local network but by taking a step size
+        less than one so the target network's parameter values trail the local networks. This helps stabilise training
+        """
         for target_param, local_param in zip(target_model.parameters(), local_model.parameters()):
             target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
 
     def my_func(self, i):
-
+        """
+        For plotting animations
+        """
         if self.env.env_name == "segment":
             if len(self.list_evaluation_states) > 0: # if not empty
                 self.ax.cla()
@@ -124,10 +134,6 @@ class Base_Agent():
                             cmap="Blues",
                             annot=True)
                 self.ax.set_title("Ground truth")
-#                 self.ax.set_title(self.list_evaluation_captions[i])
-#                 c_bar = plt1.collections[0].colorbar
-#                 c_bar.set_ticks([-1, 0, 1, 2, 3])
-#                 c_bar.set_ticklabels(['Unknown', 'Empty', '1', '2', '3'])
 
             if len(self.list_evaluation_states) > 0: # if not empty
                 self.ax2.cla()
@@ -151,13 +157,8 @@ class Base_Agent():
                 self.list_loss_evaluation.replace(to_replace=[-1],value=np.NaN,inplace=True)
 
                 df = self.list_loss_evaluation.head(i+1)
-#                 print(len(df))
                 palette = sns.color_palette('Spectral',self.env.nA)
-#                 palette = sns.color_palette("Paired", n_colors=self.env.nA)
-
-#                 palette = sns.color_palette("tab10", n_colors=self.env.nA)
                 df = df.melt('time_step', var_name='Algorithm',  value_name='loss')
-#                 print("melt=", df)
                 plt1 = sns.lineplot(x="time_step", y="loss", data=df, hue='Algorithm', palette=palette, ax=self.ax, marker="o")
 
                 plt1.set_xlabel('time spent by the agent for each algorithm (seconds)')
@@ -170,74 +171,23 @@ class Base_Agent():
 
                 self.ax.set_title("Dataset: " + self.env.current_dataset_name) # "  Best algo: " + str(self.env.best_algo)) #str(self.env.best_algo_time) + " hours for Algorithm "
 
-#                 g.despine(left=True)
-#                 plt1.legend(loc=)
-
-#                 plt1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', borderaxespad=0.)
-
                 plt1.fill_between(self.upperbound['time_step'], self.upperbound[0], self.lowerbound[0], facecolor='dimgray', alpha=0.1, label='area between upperbound and lowerbound')
-#                 self.fig.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
-
-
-
-#             if len(self.list_evaluation_states) > 0: # if not empty
-#                 self.ax2.cla()
-#                 plt2 = sns.heatmap(self.list_evaluation_states[i, ...],
-#                             ax = self.ax2,
-#                             cbar = True,
-#                             cbar_ax = self.cbar_ax2,
-#                             vmin = self.list_evaluation_states.min(),
-#                             vmax = self.list_evaluation_states.max(),
-#                             cmap="Blues")
-# #                             ,annot=True)
-#                 self.ax2.set_title(self.list_evaluation_captions[i])
-#                 c_bar = plt2.collections[0].colorbar
-#                 c_bar.set_ticks([-1])
-#                 c_bar.set_ticklabels(['Unknown'])
-
-
-
-#         if len(self.list_evaluation_values) > 0: # if not empty
-#             self.ax3.cla()
-#             plt3 = sns.heatmap(self.list_evaluation_values[i, ...],
-#                         ax = self.ax3,
-#                         cbar = True,
-#                         cbar_ax = self.cbar_ax3,
-#                         vmin = self.list_evaluation_values.min(),
-#                         vmax = self.list_evaluation_values.max(),
-#                         cmap="Blues")
-# #                         ,annot=True)
-#             self.ax3.set_xticklabels(['AutoMLFreiburg', 'baseline1_linear', 'baseline2_3dcnn', 'baseline3_all_winners', 'DeepBlueAI', 'DeepWisdom', 'Frozenmad', 'InspurAutoDL', 'Kon', 'PasaNJU', 'pretrained_inception', 'Surromind', 'TeamZhaw'], rotation = 90)
-
-#             if self.agent_name == "ddqn":
-#                 self.ax3.set_title("Q-values")
-#             elif self.agent_name == "sac" or self.agent_name == "ppo":
-#                 self.ax3.set_title("Action probabilities")
-
-#             if not self.env.freely_moving:
-#                 plt3.set_xticklabels(['stand_still', 'up', 'down', 'left', 'right'])
 
     def visualize(self, download):
-#         if len(self.list_evaluation_states)>0: # if not empty
-#             self.list_evaluation_states = torch.stack(self.list_evaluation_states).cpu()
-#             print("self.list_evaluation_states=", self.list_evaluation_states)
+        """
+        Visualize animations
+        """
+
         if len(self.list_evaluation_values)>0: # if not empty
             self.list_evaluation_values = torch.stack(self.list_evaluation_values).cpu()
-#             print("self.list_evaluation_values=", self.list_evaluation_values)
         if len(self.list_ground_truth)>0: # if not empty
             self.list_ground_truth = torch.stack(self.list_ground_truth).cpu()
-#             print("self.list_ground_truth=", self.list_ground_truth)
 
         self.upperbound = self.list_loss_evaluation.groupby(['time_step']).max()
         self.upperbound = self.upperbound.max(axis = 1).reset_index()
 
         self.lowerbound = self.list_loss_evaluation.groupby(['time_step']).min()
         self.lowerbound = self.lowerbound.min(axis = 1).reset_index()
-
-#         print("self.upperbound=", self.upperbound)
-#         print("self.lowerbound=", self.lowerbound)
-
-#         print(self.upperbound[0])
 
         anim = FuncAnimation(fig = self.fig, func = self.my_func, frames = len(self.list_loss_evaluation), interval = 2000, blit = False)
 
@@ -248,13 +198,13 @@ class Base_Agent():
             filename = filename + self.env.env_name + "_" + self.agent_name + "_" + date + ".gif"
             anim.save(filename, writer=writer, dpi=200)
 
-
         return anim
 
     def run(self, evaluate):
+        """
+        Run 1 episode
+        """
         print("########## " + self.agent_name + " is running ##########")
-
-
         self.list_rewards = pd.DataFrame (columns = [self.agent_name])
         self.list_training_best_performance = pd.DataFrame (columns = [self.agent_name])
         self.list_test_best_performance = pd.DataFrame (columns = [self.agent_name])
@@ -298,10 +248,7 @@ class Base_Agent():
         # Get the current state
         state = self.env.observe().clone().to(self.device, dtype=torch.float)
         while not done:
-
             episode_states.append(state)
-
-
             with torch.no_grad():
                 # Get and execute the next action for the current state
                 action = self.select_action(state, evaluate)
@@ -309,7 +256,6 @@ class Base_Agent():
                     self.number_of_switching += 1
                 next_state, reward, done, info = self.env.step(action)
                 ep_reward = ep_reward + reward.item()
-
                 if self.agent_name == "freeze_thaw":
                     self.think(action, next_state)
 
@@ -350,7 +296,6 @@ class Base_Agent():
                 self.list_evaluation_states.append(state[0].clone())
                 self.list_evaluation_captions.append(evaluation_caption)
                 if self.env.dataset=="artificial":
-#                     self.list_loss_evaluation = self.list_loss_evaluation.append(pd.DataFrame({'time_step': math.ceil(next_state[1, x, y].item()*self.env.max_number_of_steps-1), str(int(action)):next_state[0, x, y].item()}, index=[0]), ignore_index=True)
                     self.list_loss_evaluation = self.list_loss_evaluation.append(pd.DataFrame({'time_step': math.ceil(next_state[1, x, y].item()*self.env.max_number_of_steps-1), str(self.env.get_algo_name_by_index_artificial(int(action))):next_state[0, x, y].item()}, index=[0]), ignore_index=True)
                 else:
                     self.list_loss_evaluation = self.list_loss_evaluation.append(pd.DataFrame({'time_step': math.ceil(next_state[1, x, y].item()*self.env.max_number_of_steps-1), str(self.env.get_algo_name_by_index(int(action))):next_state[0, x, y].item()}, index=[0]), ignore_index=True)
@@ -367,8 +312,6 @@ class Base_Agent():
                 self.list_ground_truth.append(self.env.ships_board)
             self.list_evaluation_states.append(state[0].clone())
             self.list_evaluation_captions.append(last_evaluation_caption)
-#             self.list_loss_evaluation = self.list_loss_evaluation.append(pd.DataFrame({'time_step': next_state[1, x, y].item(), int(action):next_state[0, x, y].item()},index=[0]), ignore_index=True)
-#             self.list_loss_evaluation = self.list_loss_evaluation.append({0:state[0, 0, 0].item(), 1:state[0, 0, 1].item(), 2:state[0, 0, 2].item()}, ignore_index=True)
 
         if self.env.env_name == "learning_curve":
             if evaluate:
@@ -381,9 +324,6 @@ class Base_Agent():
         # Epsilon is decayed since the agent is getting more and more knowledge
         if self.epsilon != None and self.epsilon_decay_rate != None and not evaluate:
             self.epsilon = self.epsilon * self.epsilon_decay_rate
-#             self.epsilon = max(self.epsilon * self.epsilon_decay_rate, 0.1)
-
-#         self.env.close()
 
         # For PPO
         self.many_episode_states.append(episode_states)
@@ -394,13 +334,10 @@ class Base_Agent():
 
         # Print log
         if self.env.env_name == "learning_curve":
-            print(f'Agent: {self.agent_name} . Number of steps to finish: {self.env.current_number_of_steps} . Loss: {loss} '
-#             f'Best performance: {self.env.current_max_performance}')
-            f'Reward: {ep_reward}')
+            print(f'Agent: {self.agent_name} . Number of steps to finish: {self.env.current_number_of_steps} . 'f'Reward: {ep_reward}')
             print("Epsilon:", self.epsilon)
         else:
-            print(f'Agent: {self.agent_name} . Number of steps to finish: {self.env.current_number_of_steps} . Loss: {loss} '
-                f'Reward: {ep_reward}')
+            print(f'Agent: {self.agent_name} . Number of steps to finish: {self.env.current_number_of_steps} . 'f'Reward: {ep_reward}')
             print("Epsilon:", self.epsilon)
 
         self.switching_frequency = pd.DataFrame (columns = [self.agent_name])

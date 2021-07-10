@@ -1,4 +1,14 @@
+from agents.base_agent import *
+from nn_builder.pytorch.CNN import CNN
+from helpers import *
+from torch.distributions import Categorical
+import copy
+import sys
 class PPO_Discrete(Base_Agent):
+    """
+    Proximal Policy Optimization agent for discrete action space
+    This code is adapted from: https://github.com/p-christ/Deep-Reinforcement-Learning-Algorithms-with-PyTorch
+    """
     def __init__(self, agent_name, env, gamma, batch_size, epsilon, epsilon_decay_rate):
         super().__init__(agent_name, env)
         self.gamma = gamma # The weight for future rewards
@@ -46,72 +56,25 @@ class PPO_Discrete(Base_Agent):
 
         self.policy_new_optimizer = torch.optim.Adam(self.policy_new.parameters(), lr=1e-4, eps=1e-4)
 
-#         self.episode_number = 0
-
         self.many_episode_states = []
         self.many_episode_actions = []
         self.many_episode_rewards = []
 
-#         self.experience_generator = Parallel_Experience_Generator(self.environment, self.policy_new, self.config.seed,
-#                                                                   self.hyperparameters, self.action_size)
-
-#         self.exploration_strategy = Epsilon_Greedy_Exploration(self.config)
-
-    def play_n_episodes(self, n):
-        """Plays n episodes using the fixed policy and returns the data"""
-
-        many_episode_states = []
-        many_episode_actions = []
-        many_episode_rewards = []
-
-        env_clone =  copy.deepcopy(self.env)
-
-        for _ in range(n):
-            state = env_clone.reset(reset_goals=True, training=True, max_number_of_steps=self.env.max_number_of_steps)
-            done = False
-            episode_states = []
-            episode_actions = []
-            episode_rewards = []
-            while not done:
-                action = self.select_action(state, evaluate=False)
-                next_state, reward, done, _ = env_clone.step(action)
-#                     if self.hyperparameters["clip_rewards"]: reward = max(min(reward, 1.0), -1.0)
-                episode_states.append(state)
-                episode_actions.append(action)
-                episode_rewards.append(reward)
-                state = next_state
-
-            many_episode_states.append(episode_states)
-            many_episode_actions.append(episode_actions)
-            many_episode_rewards.append(episode_rewards)
-
-        return many_episode_states, many_episode_actions, many_episode_rewards
-
     def train(self):
-        """Runs a step for the PPO agent"""
-
-#         self.many_episode_states, self.many_episode_actions, self.many_episode_rewards = self.play_n_episodes(n=1)
-
-#             self.episode_number += self.hyperparameters["episodes_per_learning_round"]
+        """
+        Train PPO agent
+        """
         loss = 0.0
-
         loss = self.policy_learn()
-
-    #             self.update_learning_rate(self.hyperparameters["learning_rate"], self.policy_new_optimizer)
-
         self.copy_policy()
         self.many_episode_states, self.many_episode_actions, self.many_episode_rewards = [], [], []
-#         print("loss=", loss)
         return loss.detach().item()
 
 
     def select_action(self, state, evaluate):
-#         random.seed(time.time())
-#         random_number = np.random.uniform()
-#         if random_number < self.epsilon and evaluate==False:
-#             # Random action
-#             action = random.randint(0,self.env.nA-1)
-#         else:
+        """
+        Output the next action
+        """
         state = [state]
         state = torch.stack(state)
         state = state.to(self.device, dtype=torch.float)
@@ -132,13 +95,11 @@ class PPO_Discrete(Base_Agent):
         return torch.tensor(action)
 
     def policy_learn(self):
-        """A learning iteration for the policy"""
+        """
+        A learning iteration for the policy
+        """
         # Calculated all discounted returns
         all_discounted_returns = self.calculate_all_discounted_returns()
-
-#             # Normalize all_discounted_returns
-#             if self.hyperparameters["normalise_rewards"]:
-#                 all_discounted_returns = normalise_rewards(all_discounted_returns)
 
         loss = 0.0
 
@@ -146,11 +107,12 @@ class PPO_Discrete(Base_Agent):
             all_ratio_of_policy_probabilities = self.calculate_all_ratio_of_policy_probabilities()
             loss = self.calculate_loss([all_ratio_of_policy_probabilities], all_discounted_returns)
             self.take_policy_new_optimisation_step(loss)
-#         print("loss=",loss)
         return loss
 
     def calculate_all_discounted_returns(self):
-        """Calculates the cumulative discounted return for each episode which we will then use in a learning iteration"""
+        """
+        Calculates the cumulative discounted return for each episode which we will then use in a learning iteration
+        """
         all_discounted_returns = []
         for episode in range(len(self.many_episode_states)):
             discounted_returns = [0]
@@ -162,8 +124,10 @@ class PPO_Discrete(Base_Agent):
         return all_discounted_returns
 
     def calculate_all_ratio_of_policy_probabilities(self):
-        """For each action calculates the ratio of the probability that the new policy would have picked the action vs.
-         the probability the old policy would have picked it. This will then be used to inform the loss"""
+        """
+        For each action calculates the ratio of the probability that the new policy would have picked the action vs.
+         the probability the old policy would have picked it. This will then be used to inform the loss
+        """
         if torch.cuda.is_available():
             all_states = [state.cuda() for states in self.many_episode_states for state in states]
         else:
@@ -180,7 +144,9 @@ class PPO_Discrete(Base_Agent):
         return ratio_of_policy_probabilities
 
     def calculate_log_probability_of_actions(self, policy, states, actions):
-        """Calculates the log probability of an action occuring given a policy and starting state"""
+        """
+        Calculates the log probability of an action occuring given a policy and starting state
+        """
         policy_output = policy.forward(states).to(self.device)
 #             policy_distribution = create_actor_distribution(self.action_types, policy_output, self.action_size)
 
@@ -190,7 +156,9 @@ class PPO_Discrete(Base_Agent):
         return policy_distribution_log_prob
 
     def calculate_loss(self, all_ratio_of_policy_probabilities, all_discounted_returns):
-        """Calculates the PPO loss"""
+        """
+        Calculates the PPO loss
+        """
         all_ratio_of_policy_probabilities = torch.squeeze(torch.stack(all_ratio_of_policy_probabilities))
         all_ratio_of_policy_probabilities = torch.clamp(input=all_ratio_of_policy_probabilities,
                                                         min = -sys.maxsize,
@@ -200,28 +168,35 @@ class PPO_Discrete(Base_Agent):
         potential_loss_value_2 = all_discounted_returns * self.clamp_probability_ratio(all_ratio_of_policy_probabilities)
         loss = torch.min(potential_loss_value_1, potential_loss_value_2)
         loss = -torch.mean(loss)
-#         print("loss=", loss)
         return loss
 
     def clamp_probability_ratio(self, value):
-        """Clamps a value between a certain range determined by hyperparameter clip epsilon"""
+        """
+        Clamps a value between a certain range determined by hyperparameter clip epsilon
+        """
         return torch.clamp(input=value, min=1.0 - self.clip_epsilon,
                                   max=1.0 + self.clip_epsilon)
 
     def take_policy_new_optimisation_step(self, loss):
-        """Takes an optimisation step for the new policy"""
+        """
+        Takes an optimisation step for the new policy
+        """
         self.policy_new_optimizer.zero_grad()  # reset gradients to 0
         loss.backward()  # this calculates the gradients
         torch.nn.utils.clip_grad_norm_(self.policy_new.parameters(), self.gradient_clipping_norm)  # clip gradients to help stabilise training
         self.policy_new_optimizer.step()  # this applies the gradients
 
     def copy_policy(self):
-        """Sets the old policy's parameters equal to the new policy's parameters"""
+        """
+        Sets the old policy's parameters equal to the new policy's parameters
+        """
         for old_param, new_param in zip(self.policy_old.parameters(), self.policy_new.parameters()):
             old_param.data.copy_(new_param.data)
 
     def save_result(self):
-        """Save the results seen by the agent in the most recent experiences"""
+        """
+        Save the results seen by the agent in the most recent experiences
+        """
         for ep in range(len(self.many_episode_rewards)):
             total_reward = np.sum(self.many_episode_rewards[ep])
             self.game_full_episode_scores.append(total_reward)
